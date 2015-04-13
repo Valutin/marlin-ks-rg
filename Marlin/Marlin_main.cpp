@@ -931,6 +931,38 @@ bool touching_print_surface() {
   return FSR_TRIGGERED; 
 }
 
+bool touching_print_surface_2(float FSR_REF)
+{
+  // Original Logic:
+  //    return rawBedSample() < 800; // ADC goes from 0 to 1023
+  // In the original logic, it requires external circuits and such to massage
+  // the input into the bed temp thermistor input.
+  // The new logic below makes use of fsr_calibration() to determine the trigger points
+ 
+  float FSR_READING;
+  static long FSR_TRIGGERED_TIME;
+  static float FSR_TRIGGERED_ZPOS; 
+
+  // Let's take one sample reading. 
+  FSR_READING = rawBedSample();
+
+  if ( FSR_READING < ( FSR_REF-20 )) {
+    FSR_TRIGGERED=true;
+    FSR_TRIGGERED_TIME=millis(); 
+    return true;
+  };
+
+  if ( FSR_READING >  ( FSR_REF-20 ) ) {
+    FSR_TRIGGERED=false;
+    FSR_TRIGGERED_TIME=0;
+    return false;
+  };
+
+  // If we are at this point, we are somewhere between recovery and triggered.
+  // We _could_ add a timeout here, but I think we'll leave it for now
+  return FSR_TRIGGERED; 
+}
+
 static void run_z_probe() {
     plan_bed_level_matrix.set_to_identity();
 
@@ -1008,6 +1040,82 @@ static void run_z_probe() {
 #endif
 }
 
+static void run_z_probe_2(float FSR_REF) {
+    plan_bed_level_matrix.set_to_identity();
+
+#ifdef DELTA
+  #ifdef FSR_BED_LEVELING
+    // Probing using the FSR on the bed thermistor readings
+    // feedrate = 600; //mm/min
+    feedrate = 100; //mm/min   Note: Too fast and you will "hit" the bed hard and generate vibrations
+    float step = 0.01;
+    int direction = -1;
+    while (touching_print_surface_2(FSR_REF)) {
+      destination[Z_AXIS] -= step * direction;
+      prepare_move_raw();
+      st_synchronize();
+    }
+    while (!touching_print_surface_2(FSR_REF)) {
+      destination[Z_AXIS] += step * direction;
+      prepare_move_raw();
+      st_synchronize();
+    }
+//    while (step > 0.005) {
+//      step *= 0.8;
+//      feedrate *= 0.6;
+//      direction = touching_print_surface() ? 1 : -1;
+//      destination[Z_AXIS] += step * direction;
+//      prepare_move_raw();
+//      st_synchronize();
+//    }
+  #else
+    // Probing using the z-min-stop
+    enable_endstops(true);
+    float start_z = current_position[Z_AXIS];
+    long start_steps = st_get_position(Z_AXIS);
+
+    feedrate = homing_feedrate[Z_AXIS]/4;
+    destination[Z_AXIS] = -10;
+    prepare_move_raw();
+    st_synchronize();
+    endstops_hit_on_purpose();
+
+    enable_endstops(false);
+    long stop_steps = st_get_position(Z_AXIS);
+
+    float mm = start_z - float(start_steps - stop_steps) / axis_steps_per_unit[Z_AXIS];
+    current_position[Z_AXIS] = mm;
+    calculate_delta(current_position);
+    plan_set_position(delta[X_AXIS], delta[Y_AXIS], delta[Z_AXIS], current_position[E_AXIS]);
+  #endif
+#else
+    feedrate = homing_feedrate[Z_AXIS];
+
+    // move down until you find the bed
+    float zPosition = -10;
+    plan_buffer_line(current_position[X_AXIS], current_position[Y_AXIS], zPosition, current_position[E_AXIS], feedrate/60, active_extruder);
+    st_synchronize();
+
+        // we have to let the planner know where we are right now as it is not where we said to go.
+    zPosition = st_get_position_mm(Z_AXIS);
+    plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], zPosition, current_position[E_AXIS]);
+
+    // move up the retract distance
+    zPosition += home_retract_mm(Z_AXIS);
+    plan_buffer_line(current_position[X_AXIS], current_position[Y_AXIS], zPosition, current_position[E_AXIS], feedrate/60, active_extruder);
+    st_synchronize();
+
+    // move back down slowly to find bed
+    feedrate = homing_feedrate[Z_AXIS]/4;
+    zPosition -= home_retract_mm(Z_AXIS) * 2;
+    plan_buffer_line(current_position[X_AXIS], current_position[Y_AXIS], zPosition, current_position[E_AXIS], feedrate/60, active_extruder);
+    st_synchronize();
+
+    current_position[Z_AXIS] = st_get_position_mm(Z_AXIS);
+    // make sure the planner knows where we are as it may be a bit different than we last said to move to
+    plan_set_position(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS]);
+#endif
+}
 
 
 #ifdef FSR_BED_LEVELING
@@ -1246,6 +1354,8 @@ static void retract_z_probe() {
 
 /// Probe bed height at position (x,y), returns the measured z value
 static float probe_pt(float x, float y, float z_before) {
+
+
   // move to right place
   do_blocking_move_to(current_position[X_AXIS], current_position[Y_AXIS], z_before);
   do_blocking_move_to(x - X_PROBE_OFFSET_FROM_EXTRUDER, y - Y_PROBE_OFFSET_FROM_EXTRUDER, current_position[Z_AXIS]);
@@ -1253,8 +1363,13 @@ static float probe_pt(float x, float y, float z_before) {
 #ifdef SERVO_ENDSTOPS
   engage_z_probe();   // Engage Z Servo endstop if available
 #endif //SERVO_ENDSTOPS
-
-  run_z_probe();
+ 
+  delay(3000);
+  float FSR_REF;
+    // Let's take one sample reading. 
+  FSR_REF = rawBedSample();
+  
+  run_z_probe_2(FSR_REF);
   float measured_z = current_position[Z_AXIS];
 
 #ifdef SERVO_ENDSTOPS
@@ -1273,7 +1388,10 @@ static float probe_pt(float x, float y, float z_before) {
   SERIAL_PROTOCOL(rawBedSample());
 #endif
   SERIAL_PROTOCOLPGM("\n");
+
   return measured_z;
+  
+  
 }
 
 #endif // #ifdef ENABLE_AUTO_BED_LEVELING
@@ -1803,12 +1921,13 @@ void process_commands()
                 #ifdef DELTA
                 // Avoid probing the corners (outside the round or hexagon print surface) on a delta printer.
                 float distance_from_center = sqrt(xProbe*xProbe + yProbe*yProbe);
-                if (distance_from_center > 100) continue;
+                if (distance_from_center > DELTA_PROBABLE_RADIUS) continue;
                 #endif //DELTA
 
                 float z_before = probePointCounter == 0 ? Z_RAISE_BEFORE_PROBING :
                   current_position[Z_AXIS] + Z_RAISE_BETWEEN_PROBINGS;
-                float measured_z = probe_pt(xProbe, yProbe, z_before);
+                //float measured_z = probe_pt(xProbe, yProbe, z_before);
+                float measured_z = probe_pt(0,0, z_before);//probe_pt(xProbe, yProbe, z_before);
 
                 #ifdef NONLINEAR_BED_LEVELING
                 bed_level[xCount][yCount] = measured_z + z_offset;
@@ -4004,4 +4123,3 @@ bool setTargetedHotend(int code){
   }
   return false;
 }
-
