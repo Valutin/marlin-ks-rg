@@ -388,23 +388,23 @@ const bool Z_MAX_ENDSTOP_INVERTING = true; // set to true to invert the logic of
 
   // these are the positions on the bed to do the probing
   #define DELTA_PROBABLE_RADIUS (DELTA_PRINTABLE_RADIUS-10)
-  #define LEFT_PROBE_BED_POSITION -DELTA_PRINTABLE_RADIUS
-  #define RIGHT_PROBE_BED_POSITION DELTA_PRINTABLE_RADIUS
-  #define BACK_PROBE_BED_POSITION DELTA_PRINTABLE_RADIUS
-  #define FRONT_PROBE_BED_POSITION -DELTA_PRINTABLE_RADIUS
+  #define LEFT_PROBE_BED_POSITION -DELTA_PROBABLE_RADIUS //Change printable to probable
+  #define RIGHT_PROBE_BED_POSITION DELTA_PROBABLE_RADIUS //Change printable to probable
+  #define BACK_PROBE_BED_POSITION DELTA_PROBABLE_RADIUS //Change printable to probable
+  #define FRONT_PROBE_BED_POSITION -DELTA_PROBABLE_RADIUS //Change printable to probable
 
   // these are the offsets to the probe relative to the extruder tip (Hotend - Probe)
   #define X_PROBE_OFFSET_FROM_EXTRUDER 0.0
   #define Y_PROBE_OFFSET_FROM_EXTRUDER 0.0
-  #define Z_PROBE_OFFSET_FROM_EXTRUDER 0.125  // Increase this if the first layer is too thin.
+  #define Z_PROBE_OFFSET_FROM_EXTRUDER 0.0  // Increase this if the first layer is too thin.
 
   #define Z_RAISE_BEFORE_HOMING 10       // (in mm) Raise Z before homing (G28) for Probe Clearance.
                                         // Be sure you have this distance over your Z_MAX_POS in case
 
   #define XY_TRAVEL_SPEED 8000         // X and Y axis travel speed between probes, in mm/min
 
-  #define Z_RAISE_BEFORE_PROBING 10  //How much the extruder will be raised before traveling to the first probing point.
-  #define Z_RAISE_BETWEEN_PROBINGS 5  //How much the extruder will be raised when traveling from between next probing points
+  #define Z_RAISE_BEFORE_PROBING 3  //How much the extruder will be raised before traveling to the first probing point.
+  #define Z_RAISE_BETWEEN_PROBINGS 3  //How much the extruder will be raised when traveling from between next probing points
   #define Z_RAISE_AFTER_PROBING 50  //How much the extruder will be raised after the last probing point.
 
 
@@ -438,6 +438,7 @@ const bool Z_MAX_ENDSTOP_INVERTING = true; // set to true to invert the logic of
 
   #ifdef ACCURATE_BED_LEVELING
     #define ACCURATE_BED_LEVELING_POINTS 9
+    
     #define ACCURATE_BED_LEVELING_GRID_X ((RIGHT_PROBE_BED_POSITION - LEFT_PROBE_BED_POSITION) / (ACCURATE_BED_LEVELING_POINTS - 1))
     #define ACCURATE_BED_LEVELING_GRID_Y ((BACK_PROBE_BED_POSITION - FRONT_PROBE_BED_POSITION) / (ACCURATE_BED_LEVELING_POINTS - 1))
 
@@ -477,7 +478,7 @@ const bool Z_MAX_ENDSTOP_INVERTING = true; // set to true to invert the logic of
 #define XYZ_PULLEY_TEETH 16
 #define XYZ_STEPS (XYZ_FULL_STEPS_PER_ROTATION * XYZ_MICROSTEPS / double(XYZ_BELT_PITCH) / double(XYZ_PULLEY_TEETH))
 
-#define DEFAULT_AXIS_STEPS_PER_UNIT   {57.8053,57.8053,57.8053, 94.5}
+#define DEFAULT_AXIS_STEPS_PER_UNIT   {57.8053,57.8053,57.8053, 109.4}  // Ryan's Mod... changed extruder calibration steps/mm from 94.5 to 109.4
 #define DEFAULT_MAX_FEEDRATE          {200, 200, 200, 25}    // (mm/sec)
 #define DEFAULT_MAX_ACCELERATION      {2000,2000,2000,2000}    // X, Y, Z, E maximum start speed for accelerated moves. E default values are good for skeinforge 40+, for older versions raise them a lot.
 
